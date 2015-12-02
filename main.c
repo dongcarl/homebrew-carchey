@@ -40,6 +40,8 @@
 #include <CoreServices/CoreServices.h>
 #include <sys/param.h>
 #include <sys/mount.h>
+#include <sys/sysctl.h>
+#include <sys/utsname.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <err.h>
@@ -51,7 +53,6 @@
 #include <pwd.h>
 #include <uuid/uuid.h>
 #include <crt_externs.h>
-#include <sys/sysctl.h>
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -66,14 +67,16 @@
 
 static int cflag, oflag;
 
-static void usage(void)
+static inline void
+usage(void)
 {
   (void)fprintf(stderr, "%s\n",
 		"usage: archey [-co]");
   exit(1);
 }
 
-char *get_effective_uid(void)
+static inline char *
+get_effective_uid(void)
 {
   struct passwd *pw = NULL;
   if ((pw = getpwuid(geteuid())))
@@ -84,7 +87,8 @@ char *get_effective_uid(void)
 
 #define MAXHOSTNAMELEN 256/* max hostname size */
 
-char *get_hostname(char *buff)
+static inline char *
+get_hostname(char *buff)
 {
   char *p;
   
@@ -98,18 +102,12 @@ char *get_hostname(char *buff)
   return buff;
 }
 
-#define _SYS_NAMELEN 256
-#define CTL_KERN 1/* "high kernel": proc, limits */
-#define KERN_OSTYPE  1/* string: system version */
-
-
-char *get_uname(char *buff)
+static inline char *
+get_uname(char *buff)
 {
-  int mib[2], rval;
+  int mib[2] = {CTL_KERN, KERN_OSTYPE};
   size_t len = _SYS_NAMELEN;
-  
-  mib[0] = CTL_KERN;
-  mib[1] = KERN_OSTYPE;
+
   if (sysctl(mib, 2, buff, &len, NULL, 0) == -1)
     err(1, "get_uname");
   return buff;
@@ -117,7 +115,8 @@ char *get_uname(char *buff)
 
 #define OS_X_VERSION_BUFFER_SIZE 256
 
-char *get_OS_X_version(char *buff)
+static inline char *
+get_OS_X_version(char *buff)
 {
   SInt32 majorVersion,minorVersion,bugFixVersion;
 
@@ -129,7 +128,8 @@ char *get_OS_X_version(char *buff)
   return buff;
 }
 
-char *get_uptime(char *buff)
+static inline char *
+get_uptime(char *buff)
 {
   time_t uptime;
   int days, hrs, mins, secs;
@@ -171,7 +171,8 @@ char *get_uptime(char *buff)
   return buff;
 }
 
-char *get_terminal(char *buff) {
+static inline char *
+get_terminal(char *buff) {
   char* p;
   
   char *term = getenv("TERM");
@@ -188,7 +189,8 @@ char *get_terminal(char *buff) {
 
 #define CPU_MAX_LEX 256
 
-char *get_cpu(char *buff)
+static inline char *
+get_cpu(char *buff)
 {
   size_t len = CPU_MAX_LEX;
   if (sysctlbyname("machdep.cpu.brand_string", buff, &len, 0, 0))
@@ -204,7 +206,8 @@ char *get_cpu(char *buff)
   return buff;
 }
 
-char *get_mem(char *buff)
+static inline char *
+get_mem(char *buff)
 {
   int mib[2];
   int64_t size = 0;
@@ -219,7 +222,8 @@ char *get_mem(char *buff)
   return buff;
 }
 
-char *get_disk(char *buff)
+static inline char *
+get_disk(char *buff)
 {
   struct statfs res;
   statfs("/", &res);
@@ -228,12 +232,14 @@ char *get_disk(char *buff)
   return buff;
 }
 
-int isInternalBattery(CFDictionaryRef current_dict) {
+static inline int 
+isInternalBattery(CFDictionaryRef current_dict) {
   CFStringRef type = CFDictionaryGetValue(current_dict, CFSTR(kIOPSTypeKey));
   return type != NULL && CFStringCompare(type, CFSTR(kIOPSInternalBatteryType), 0) == kCFCompareEqualTo;
 }
 
-CFDictionaryRef getInternalBattery() {
+static inline CFDictionaryRef 
+getInternalBattery() {
   CFTypeRef power_sources =  IOPSCopyPowerSourcesInfo();
   CFArrayRef power_sources_list = IOPSCopyPowerSourcesList(power_sources);
   for (CFIndex i = 0; i < CFArrayGetCount(power_sources_list); i++) {
@@ -244,7 +250,8 @@ CFDictionaryRef getInternalBattery() {
   return NULL;
 }
 
-char *get_battery(char *buff, CFDictionaryRef battery_dict) {
+static inline char *
+get_battery(char *buff, CFDictionaryRef battery_dict) {
   if (CFBooleanGetValue(CFDictionaryGetValue(battery_dict, CFSTR(kIOPSIsChargedKey)))) {
     sprintf(buff, "100%%");
   }
@@ -262,7 +269,8 @@ char *get_battery(char *buff, CFDictionaryRef battery_dict) {
   return buff;
 }
 
-char *get_brew(char *buff) {
+static inline char *
+get_brew(char *buff) {
   int file_count = 0;
   DIR *dirp;
   struct dirent *entry;
@@ -279,7 +287,8 @@ char *get_brew(char *buff) {
 }
 
 
-int main (int argc, char ** argv)
+int
+main (int argc, char ** argv)
 {
   int ch;
   char hostname_buff[MAXHOSTNAMELEN];
@@ -310,21 +319,24 @@ int main (int argc, char ** argv)
   }
 
   printf("\n");
-  printf(KGRN "                 ###                  "); printf(KCYN "User: " RESET);         printf("%s\n", get_effective_uid());
-  printf(KGRN "               ####                   "); printf(KCYN "Hostname: " RESET);     printf("%s\n", get_hostname(hostname_buff));
-  printf(KGRN "               ###                    "); printf(KCYN "Distro: " RESET);       printf("%s\n", get_OS_X_version(os_buff));
-  printf(KGRN "       #######    #######             "); printf(KCYN "Kernel: " RESET);       printf("%s\n", get_uname(uname_buff));
-  printf(KYEL "     ######################           "); printf(KCYN "Uptime: " RESET);       printf("%s\n", get_uptime(uptime_buff));
-  printf(KYEL "    #####################             "); printf(KCYN "Shell: " RESET);        printf("%s\n", getenv("SHELL"));
-  printf(KRED "    ####################              "); printf(KCYN "Terminal: " RESET);     printf("%s\n", get_terminal(terminal_buff));
-  printf(KRED "    ####################              "); printf(KCYN "Packages: " RESET);     printf("%s\n", get_brew(brew_buff));
-  printf(KRED "    #####################             "); printf(KCYN "CPU: " RESET);          printf("%s\n", get_cpu(cpu_buff));
-  printf(KMAG "     ######################           "); printf(KCYN "Memory: " RESET);       printf("%s\n", get_mem(mem_buff));
-  printf(KMAG "      ####################            "); printf(KCYN "Disk: " RESET);         printf("%s\n", get_disk(disk_buff));
+  printf(KGRN "                 ###                  " KCYN "User: " RESET);         printf("%s\n", get_effective_uid());
+  printf(KGRN "               ####                   " KCYN "Hostname: " RESET);     printf("%s\n", get_hostname(hostname_buff));
+  printf(KGRN "               ###                    " KCYN "Distro: " RESET);       printf("%s\n", get_OS_X_version(os_buff));
+  printf(KGRN "       #######    #######             " KCYN "Kernel: " RESET);       printf("%s\n", get_uname(uname_buff));
+  printf(KYEL "     ######################           " KCYN "Uptime: " RESET);       printf("%s\n", get_uptime(uptime_buff));
+  printf(KYEL "    #####################             " KCYN "Shell: " RESET);        printf("%s\n", getenv("SHELL"));
+  printf(KRED "    ####################              " KCYN "Terminal: " RESET);     printf("%s\n", get_terminal(terminal_buff));
+  printf(KRED "    ####################              " KCYN "Packages: " RESET);     printf("%s\n", get_brew(brew_buff));
+  printf(KRED "    #####################             " KCYN "CPU: " RESET);          printf("%s\n", get_cpu(cpu_buff));
+  printf(KMAG "     ######################           " KCYN "Memory: " RESET);       printf("%s\n", get_mem(mem_buff));
+  printf(KMAG "      ####################            " KCYN "Disk: " RESET);         printf("%s\n", get_disk(disk_buff));
   printf(KBLU "        ################              "); 
   if (internal_battery_dict != NULL) {
       printf(KCYN "Battery: " RESET);
       printf("%s\n", get_battery(battery_buff, internal_battery_dict));
+  }
+  else {
+  	  printf("\n");
   }
   printf(KBLU "         ####     #####               " RESET);
   printf("\n\n\n");
