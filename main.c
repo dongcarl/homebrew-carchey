@@ -53,36 +53,43 @@
 #include <pwd.h>
 #include <uuid/uuid.h>
 #include <crt_externs.h>
+#include <sys/stat.h>
 
-#define KNRM  "\x1B[0m"
+//#define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
 #define KYEL  "\x1B[33m"
 #define KBLU  "\x1B[34m"
 #define KMAG  "\x1B[35m"
 #define KCYN  "\x1B[36m"
-#define KWHT  "\x1B[37m"
+//#define KWHT  "\x1B[37m"
 #define RESET "\033[0m"
+
+#define OPTIONS "co"
 
 
 static int cflag, oflag;
 
+__attribute__((noreturn))
 static inline void
 usage(void)
 {
-  (void)fprintf(stderr, "%s\n",
-		"usage: archey [-co]");
-  exit(1);
+	(void)fprintf(stderr, "usage: archey [-%s]\n", OPTIONS);
+	exit(1);
 }
+
 
 static inline char *
 get_effective_uid(void)
 {
-  struct passwd *pw = NULL;
-  if ((pw = getpwuid(geteuid())))
-    return pw->pw_name;
-  else
-    exit(1);
+	struct passwd *pw = NULL;
+	if ((pw = getpwuid(geteuid()))) {
+		return pw->pw_name;
+	}
+	else {
+		(void)fprintf(stderr, "ERROR: could not get username");
+		exit(1);
+	}
 }
 
 #define MAXHOSTNAMELEN 256/* max hostname size */
@@ -90,27 +97,33 @@ get_effective_uid(void)
 static inline char *
 get_hostname(char *buff)
 {
-  char *p;
+	char *p;
   
-  if (gethostname(buff, MAXHOSTNAMELEN))
-    err(1, "gethostname");
+	if (gethostname(buff, MAXHOSTNAMELEN)) {
+		(void)fprintf(stderr, "ERROR: could not get hostname");
+		exit(1);
+	}
 
-  p = strchr(buff, '.');
-  if (p != NULL)
-    *p = '\0';
+	// trim off domain information like in `hostname -s'
+	p = strchr(buff, '.');
+	if (p != NULL) {
+		*p = '\0';
+	}
   
-  return buff;
+	return buff;
 }
 
 static inline char *
 get_uname(char *buff)
 {
-  int mib[2] = {CTL_KERN, KERN_OSTYPE};
-  size_t len = _SYS_NAMELEN;
+	int mib[2] = { CTL_KERN, KERN_OSTYPE };
+	size_t len = _SYS_NAMELEN;
 
-  if (sysctl(mib, 2, buff, &len, NULL, 0) == -1)
-    err(1, "get_uname");
-  return buff;
+	if (sysctl(mib, 2, buff, &len, NULL, 0)) {
+		(void)fprintf(stderr, "ERROR: could not get username");
+		exit(1);
+	}
+    return buff;
 }
 
 #define OS_X_VERSION_BUFFER_SIZE 256
@@ -118,84 +131,98 @@ get_uname(char *buff)
 static inline char *
 get_OS_X_version(char *buff)
 {
-  SInt32 majorVersion,minorVersion,bugFixVersion;
+	SInt32 majorVersion, minorVersion, bugFixVersion;
 
-  Gestalt(gestaltSystemVersionMajor, &majorVersion);
-  Gestalt(gestaltSystemVersionMinor, &minorVersion);
-  Gestalt(gestaltSystemVersionBugFix, &bugFixVersion);
-  sprintf(buff, "OS X %d.%d.%d", majorVersion, minorVersion, bugFixVersion);
-
-  return buff;
+	/*
+	 * Justification for using deprecated Gestalt:
+	 *     https://twitter.com/Catfish_Man/status/373277120408997889
+	 */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	Gestalt(gestaltSystemVersionMajor, &majorVersion);
+	Gestalt(gestaltSystemVersionMinor, &minorVersion);
+	Gestalt(gestaltSystemVersionBugFix, &bugFixVersion);
+#pragma clang diagnostic pop
+	
+	(void)sprintf(buff, "OS X %d.%d.%d", majorVersion, minorVersion, bugFixVersion);
+	return buff;
 }
 
 static inline char *
 get_uptime(char *buff)
 {
-  time_t uptime;
-  int days, hrs, mins, secs;
-  int mib[2];
-  size_t size;
-  struct timeval boottime;
-  time_t now;
+	int mib[2] = { CTL_KERN, KERN_BOOTTIME };
+	struct timeval boottime;
+	size_t size = sizeof(boottime);
 
-  (void)time(&now);
-    
-  mib[0] = CTL_KERN;
-  mib[1] = KERN_BOOTTIME;
-  size = sizeof(boottime);
+	if (sysctl(mib, 2, &boottime, &size, NULL, 0) != -1 && boottime.tv_sec != 0)
+	{
+		time_t now;
+		(void)time(&now);
 
-  if (sysctl(mib, 2, &boottime, &size, NULL, 0) != -1 && boottime.tv_sec != 0)
-  {
-    uptime = now - boottime.tv_sec;
-    if (uptime > 60)
-      uptime += 30;
-    days = uptime / 86400;
-    uptime %= 86400;
-    hrs = uptime / 3600;
-    uptime %= 3600;
-    mins = uptime / 60;
-    secs = uptime % 60;
-    if (days > 0) {
-      (void)sprintf(buff, "%d day%s", days, days > 1 ? "s" : "");
-      return buff;
-    }
-    if (hrs > 0 && mins > 0)
-      (void)sprintf(buff, "%2d:%02d", hrs, mins);
-    else if (hrs > 0)
-      (void)sprintf(buff, "%d hr%s", hrs, hrs > 1 ? "s" : "");
-    else if (mins > 0)
-      (void)sprintf(buff, "%d min%s", mins, mins > 1 ? "s" : "");
-    else
-      (void)sprintf(buff, "%d sec%s", secs, secs > 1 ? "s" : "");
-  }
-  return buff;
+		time_t uptime = now - boottime.tv_sec;
+	
+		if (uptime > 60)
+			uptime += 30;
+	    long days = uptime / 86400l;
+
+		if (days > 0) {
+			(void)sprintf(buff, "%ld day%s", days, days > 1 ? "s" : "");
+		}
+		else {
+			long hrs = uptime % 86400 / 3600l;
+			long mins = uptime % 3600 / 60l;
+
+			if (hrs > 0 && mins > 0)
+				(void)sprintf(buff, "%2ld:%02ld", hrs, mins);
+			else if (hrs > 0)
+				(void)sprintf(buff, "%ld hr%s", hrs, hrs > 1 ? "s" : "");
+			else if (mins > 0)
+				(void)sprintf(buff, "%ld min%s", mins, mins > 1 ? "s" : "");
+			else {
+				long secs = uptime % 60;
+				(void)sprintf(buff, "%ld sec%s", secs, secs > 1 ? "s" : "");
+			}
+		
+		}
+	}
+	else {
+		(void)fprintf(stderr, "ERROR: could not get uptime");
+		exit(1);
+	}
+	return buff;
 }
 
 static inline char *
-get_terminal(char *buff) {
-  char* p;
+get_terminal(char *buff)
+{
+	char* p;
   
-  char *term = getenv("TERM");
-  char *term_program = getenv("TERM_PROGRAM");
+	char *term = getenv("TERM");
+	char *term_program = getenv("TERM_PROGRAM");
 
-  p = strchr(term_program, '_');
-  if (p != NULL)
-    *p = ' ';
+	// takes care of Terminal.app which sets $TERM_PROGRAM to "Apple_Terminal"
+	//     "Apple Terminal" looks much nicer doesn't it?
+	p = strchr(term_program, '_');
+	if (p != NULL) {
+		*p = ' ';
+	}
 
-  sprintf(buff, "%s %s", term, term_program);
-
-  return buff;
+	(void)sprintf(buff, "%s %s", term, term_program);
+	return buff;
 }
 
-#define CPU_MAX_LEX 256
+#define CPU_MAX_LEN 256
 
 static inline char *
 get_cpu(char *buff)
 {
-  size_t len = CPU_MAX_LEX;
-  if (sysctlbyname("machdep.cpu.brand_string", buff, &len, 0, 0))
-    err(1, "get_cpu");
-
+  size_t len = CPU_MAX_LEN;
+  if (sysctlbyname("machdep.cpu.brand_string", buff, &len, 0, 0)) {
+	  (void)fprintf(stderr, "ERROR: could not get CPU model");
+	  exit(1);
+  }
+  
   //fuck the police
   char *tm = strstr(buff, "(TM)");
   memmove(tm, tm + 4, len);
@@ -209,135 +236,199 @@ get_cpu(char *buff)
 static inline char *
 get_mem(char *buff)
 {
-  int mib[2];
-  int64_t size = 0;
-  size_t len = sizeof(size);
+	int mib[2] = { CTL_HW, HW_MEMSIZE };
+	int64_t size = 0;
+	size_t len = sizeof(size);
 
-  mib[0] = CTL_HW;
-  mib[1] = HW_MEMSIZE;
-  if (sysctl(mib, 2, &size, &len, NULL, 0))
-    err(1, "get_mem");
-
-  (void)sprintf(buff, "%" PRId64 " GiB", size >> 30);
-  return buff;
+	if (sysctl(mib, 2, &size, &len, NULL, 0)) {
+		(void)fprintf(stderr, "ERROR: could not get memory capacity");
+		exit(1);
+	}
+	
+	(void)sprintf(buff, "%" PRId64 " GiB", size >> 30);
+	return buff;
 }
 
 static inline char *
 get_disk(char *buff)
 {
-  struct statfs res;
-  statfs("/", &res);
-  unsigned short percentFree = 100 - ((res.f_bfree * 100) / res.f_blocks);
-  (void)sprintf(buff, "%hu%%", percentFree);
-  return buff;
+	struct statfs res;
+	statfs("/", &res);
+	unsigned long long percentFree = 100 - ((res.f_bfree * 100) / res.f_blocks);
+	(void)sprintf(buff, "%llu%%", percentFree);
+	return buff;
 }
 
 static inline int 
-isInternalBattery(CFDictionaryRef current_dict) {
-  CFStringRef type = CFDictionaryGetValue(current_dict, CFSTR(kIOPSTypeKey));
-  return type != NULL && CFStringCompare(type, CFSTR(kIOPSInternalBatteryType), 0) == kCFCompareEqualTo;
+is_internal_battery(CFDictionaryRef current_dict)
+{
+	CFStringRef type = CFDictionaryGetValue(current_dict, CFSTR(kIOPSTypeKey));
+	return type != NULL && CFStringCompare(type, CFSTR(kIOPSInternalBatteryType), 0) == kCFCompareEqualTo;
 }
 
 static inline CFDictionaryRef 
-getInternalBattery() {
-  CFTypeRef power_sources =  IOPSCopyPowerSourcesInfo();
-  CFArrayRef power_sources_list = IOPSCopyPowerSourcesList(power_sources);
-  for (CFIndex i = 0; i < CFArrayGetCount(power_sources_list); i++) {
-    CFDictionaryRef current_dict = IOPSGetPowerSourceDescription(power_sources, CFArrayGetValueAtIndex(power_sources_list, i));
-    if (isInternalBattery(current_dict))
-      return current_dict;
-  }
-  return NULL;
+get_internal_battery()
+{
+	CFTypeRef power_sources =  IOPSCopyPowerSourcesInfo();
+	CFArrayRef power_sources_list = IOPSCopyPowerSourcesList(power_sources);
+	for (CFIndex i = 0; i < CFArrayGetCount(power_sources_list); i++) {
+		CFDictionaryRef current_dict = IOPSGetPowerSourceDescription(power_sources, CFArrayGetValueAtIndex(power_sources_list, i));
+		if (is_internal_battery(current_dict))
+			return current_dict;
+	}
+	return NULL;
 }
 
 static inline char *
-get_battery(char *buff, CFDictionaryRef battery_dict) {
-  if (CFBooleanGetValue(CFDictionaryGetValue(battery_dict, CFSTR(kIOPSIsChargedKey)))) {
-    sprintf(buff, "100%%");
-  }
-  else {
-    CFNumberRef current_capacity = CFDictionaryGetValue(battery_dict, CFSTR(kIOPSCurrentCapacityKey));
-    CFNumberRef max_capacity = CFDictionaryGetValue(battery_dict, CFSTR(kIOPSMaxCapacityKey));
-    if (current_capacity != NULL && max_capacity != NULL) {
-      int currCap;
-      int currMax;
-      CFNumberGetValue(current_capacity, kCFNumberIntType, &currCap);
-      CFNumberGetValue(max_capacity, kCFNumberIntType, &currMax);
-      sprintf(buff, "%d%%", (currCap * 100) / currMax);
-    }
-  }
-  return buff;
+get_battery(char *buff, CFDictionaryRef battery_dict)
+{
+	if (CFDictionaryGetValue(battery_dict, CFSTR(kIOPSIsChargedKey)) == kCFBooleanTrue) {
+		sprintf(buff, "100%%");
+ 	}
+	else {
+		CFNumberRef current_capacity = CFDictionaryGetValue(battery_dict, CFSTR(kIOPSCurrentCapacityKey));
+		CFNumberRef max_capacity = CFDictionaryGetValue(battery_dict, CFSTR(kIOPSMaxCapacityKey));
+		if (current_capacity != NULL && max_capacity != NULL) {
+			int currCap;
+			int currMax;
+			CFNumberGetValue(current_capacity, kCFNumberIntType, &currCap);
+			CFNumberGetValue(max_capacity, kCFNumberIntType, &currMax);
+			sprintf(buff, "%d%%", (currCap * 100) / currMax);
+		}
+	}
+	return buff;
+}
+
+static int
+is_there(char *candidate)
+{
+	struct stat fin;
+	int result = 0;
+
+	/* XXX work around access(2) false positives for superuser */
+	if (access(candidate, X_OK) == 0 &&
+		stat(candidate, &fin) == 0 &&
+		S_ISREG(fin.st_mode) &&
+		(getuid() != 0 ||
+		 (fin.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0)) {
+		result = 1;
+	}
+	return result;
+}
+
+static inline void
+get_brew_path(char *buff)
+{
+	char *path;
+	if ((path = getenv("PATH")) == NULL)
+		exit(EXIT_FAILURE);
+	char *filename = "brew";
+	const char *d;
+
+	while ((d = strsep(&path, ":")) != NULL) {
+		if (*d == '\0')
+			d = ".";
+		if (snprintf(buff, PATH_MAX, "%s/%s", d, filename) >= PATH_MAX)
+			continue;
+		if(is_there(buff))
+			break;
+	}
+}
+
+static inline void
+get_brew_cellar_from_brew_path(char *buff)
+{
+	char *p = strrchr(buff, '/');
+	if (p != NULL)
+		*p = '\0';
+
+	p = strrchr(buff, '/');
+	if (p != NULL)
+		*(p+1) = '\0'; //preserve the last '/'
+
+	strcat(buff, "Cellar");
+}
+
+static inline void
+get_brew_cellar_path(char *buff)
+{
+	get_brew_path(buff);
+	get_brew_cellar_from_brew_path(buff);
 }
 
 static inline char *
-get_brew(char *buff) {
-  int file_count = 0;
-  DIR *dirp;
-  struct dirent *entry;
+get_brew(char *buff)
+{
+	// HFS+ has (2^32) - 1 for the maximum number of files, same as UINT_MAX
+	unsigned int file_count = 0;
+	DIR *dirp;
+	struct dirent *entry;
+	char brew_path[PATH_MAX];
 
-  dirp = opendir("/usr/local/Cellar");
-  while ((entry = readdir(dirp)) != NULL) {
-    if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-      file_count++;
-    }
-  }
-  closedir(dirp);
-  sprintf(buff, "%d", file_count);
-  return buff;
+	get_brew_cellar_path(brew_path);
+	dirp = opendir(brew_path);
+	while ((entry = readdir(dirp)) != NULL) {
+		if (strcmp(entry->d_name, ".") != 0
+			&& strcmp(entry->d_name, "..") != 0) {
+			file_count++;
+		}
+	}
+	closedir(dirp);
+	sprintf(buff, "%u", file_count);
+	return buff;
 }
 
 
 int
 main (int argc, char ** argv)
 {
-  int ch;
-  char hostname_buff[MAXHOSTNAMELEN];
-  char uname_buff[_SYS_NAMELEN];
-  char version_buff[OS_X_VERSION_BUFFER_SIZE];
-  char uptime_buff[512];
-  char terminal_buff[64];
-  char cpu_buff[CPU_MAX_LEX];
-  char mem_buff[sizeof(int64_t)];
-  char disk_buff[4];
-  char battery_buff[4];
-  char os_buff[16];
-  char brew_buff[32];
-  CFDictionaryRef internal_battery_dict = getInternalBattery();
+	int ch;
+	char hostname_buff[MAXHOSTNAMELEN];
+	char uname_buff[_SYS_NAMELEN];
+	char version_buff[OS_X_VERSION_BUFFER_SIZE];
+	char uptime_buff[512];
+	char terminal_buff[64];
+	char cpu_buff[CPU_MAX_LEN];
+	char mem_buff[sizeof(int64_t)];
+	char disk_buff[4];
+	char battery_buff[4];
+	char brew_buff[32];
+	CFDictionaryRef internal_battery_dict = get_internal_battery();
   
-  while ((ch = getopt(argc, argv, "co")) != -1) {
-    switch (ch) {
-    case 'c':
-      cflag = 1;
-      break;
-    case 'o':
-      oflag = 1;
-      break;
-    case '?':
-    default:
-      usage();
-    }
-  }
+	while ((ch = getopt(argc, argv, "co")) != -1) {
+		switch (ch) {
+		case 'c':
+			cflag = 1;
+			break;
+		case 'o':
+			oflag = 1;
+			break;
+		case '?':
+		default:
+			usage();
+		}
+	}
 
-  printf("\n");
-  printf(KGRN "                 ###                  " KCYN "User: " RESET);         printf("%s\n", get_effective_uid());
-  printf(KGRN "               ####                   " KCYN "Hostname: " RESET);     printf("%s\n", get_hostname(hostname_buff));
-  printf(KGRN "               ###                    " KCYN "Distro: " RESET);       printf("%s\n", get_OS_X_version(os_buff));
-  printf(KGRN "       #######    #######             " KCYN "Kernel: " RESET);       printf("%s\n", get_uname(uname_buff));
-  printf(KYEL "     ######################           " KCYN "Uptime: " RESET);       printf("%s\n", get_uptime(uptime_buff));
-  printf(KYEL "    #####################             " KCYN "Shell: " RESET);        printf("%s\n", getenv("SHELL"));
-  printf(KRED "    ####################              " KCYN "Terminal: " RESET);     printf("%s\n", get_terminal(terminal_buff));
-  printf(KRED "    ####################              " KCYN "Packages: " RESET);     printf("%s\n", get_brew(brew_buff));
-  printf(KRED "    #####################             " KCYN "CPU: " RESET);          printf("%s\n", get_cpu(cpu_buff));
-  printf(KMAG "     ######################           " KCYN "Memory: " RESET);       printf("%s\n", get_mem(mem_buff));
-  printf(KMAG "      ####################            " KCYN "Disk: " RESET);         printf("%s\n", get_disk(disk_buff));
-  printf(KBLU "        ################              "); 
-  if (internal_battery_dict != NULL) {
-      printf(KCYN "Battery: " RESET);
-      printf("%s\n", get_battery(battery_buff, internal_battery_dict));
-  }
-  else {
-  	  printf("\n");
-  }
-  printf(KBLU "         ####     #####               " RESET);
-  printf("\n\n\n");
+	printf("\n");
+	printf(KGRN "                 ###                  " KCYN "User: " RESET);         printf("%s\n", get_effective_uid());
+	printf(KGRN "               ####                   " KCYN "Hostname: " RESET);     printf("%s\n", get_hostname(hostname_buff));
+	printf(KGRN "               ###                    " KCYN "Distro: " RESET);       printf("%s\n", get_OS_X_version(version_buff));
+	printf(KGRN "       #######    #######             " KCYN "Kernel: " RESET);       printf("%s\n", get_uname(uname_buff));
+	printf(KYEL "     ######################           " KCYN "Uptime: " RESET);       printf("%s\n", get_uptime(uptime_buff));
+	printf(KYEL "    #####################             " KCYN "Shell: " RESET);        printf("%s\n", getenv("SHELL"));
+	printf(KRED "    ####################              " KCYN "Terminal: " RESET);     printf("%s\n", get_terminal(terminal_buff));
+	printf(KRED "    ####################              " KCYN "Packages: " RESET);     printf("%s\n", get_brew(brew_buff));
+	printf(KRED "    #####################             " KCYN "CPU: " RESET);          printf("%s\n", get_cpu(cpu_buff));
+	printf(KMAG "     ######################           " KCYN "Memory: " RESET);       printf("%s\n", get_mem(mem_buff));
+	printf(KMAG "      ####################            " KCYN "Disk: " RESET);         printf("%s\n", get_disk(disk_buff));
+	printf(KBLU "        ################              "); 
+	if (internal_battery_dict != NULL) {
+		printf(KCYN "Battery: " RESET);
+		printf("%s\n", get_battery(battery_buff, internal_battery_dict));
+	}
+	else {
+		printf("\n");
+	}
+	printf(KBLU "         ####     #####               " RESET);
+	printf("\n\n\n");
 }
