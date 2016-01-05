@@ -2,13 +2,44 @@
 .\" Contact dongcarl@fastmail.com to correct errors or typos.
 .TH CARCHEY 1 "05 Jan 2016" "Prolific" "carchey"
 .SH NAME
-carchey \- a system information tool for OS X written in C.
+.B carchey
+\- a system information tool for OS X written in C
 .SH SYNOPSIS
-carchey [-c]
+.B carchey
+[\fB-c\fR]
 .SH DESCRIPTION
-carchey prints, along with an Apple logo, the current effective user's user name, the name of the current host, the OS X product version of the current system, the name of the current operating system, the uptime of the system, the current shell, the current terminal type, the number of packages installed by brew(1), the CPU of the current system, the current system's memory capacity, the percent free of "/", and the percentage of battery left.
+.B carchey
+prints, along with an Apple logo,
+.IP \(bu 4
+your effective user ID as a name (i.e. whoami(1)),
+.IP \(bu 4
+the name of the current host (i.e. hostname(1)),
+.IP \(bu 4
+the OS X product version of the current system (i.e. sw_vers(1)),
+.IP \(bu 4
+the name of the current operating system (i.e. uname(1)),
+.IP \(bu 4
+the uptime of the system (i.e. uptime(1)),
+.IP \(bu 4
+the current shell,
+.IP \(bu 4
+the current terminal type and program,
+.IP \(bu 4
+the number of packages installed by brew(1),
+.IP \(bu 4
+the CPU of the current system,
+.IP \(bu 4
+the current system's memory capacity,
+.IP \(bu 4
+the percentage of free disk space under "/" (i.e. df(1)),
+.IP \(bu 4
+and the percentage of battery left.
 .SH OPTIONS
-.IP -c
-disables coloring of the Apple logo
+.IP \fB-c\fR
+Disables coloring of the Apple logo
+.SH SEE ALSO
+whoami(1), hostname(1), sw_vers(1), uname(1), uptime(1), brew(1), df(1)
+.SH BUGS
+No known bugs.
 .SH AUTHOR
 Carl Dong (dongcarl@fastmail.com)
