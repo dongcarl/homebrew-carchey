@@ -51,7 +51,6 @@
 #include <sys/stat.h>
 #include <uuid/uuid.h>
 
-
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreFoundation/CFDateFormatter.h>
 #include <CoreFoundation/CFString.h>
@@ -416,7 +415,6 @@ main (int argc, char ** argv)
 {    
     int ch;
     
-
     while ((ch = getopt(argc, argv, OPTIONS)) != -1) {
 	switch (ch) {
 	case 'c':
