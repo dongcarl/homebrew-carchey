@@ -28,7 +28,7 @@ An archey script clone for OS X written in C
 [archey](https://github.com/obihann/archey-osx) takes 0.21 seconds to run. For something that's in my fish.config file, it's a little too slow for my liking
 
 ## Download
-The latest stable release is [1.0](https://github.com/dongcarl/carchey/archive/v1.0.tar.gz).
+The latest stable release is [1.0](https://github.com/dongcarl/Homebrew-carchey/archive/v1.0.tar.gz).
 
 ## Installation
 ```
