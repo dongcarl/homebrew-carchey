@@ -30,7 +30,12 @@ An archey script clone for OS X written in C
 ## Download
 The latest stable release is [1.0](https://github.com/dongcarl/homebrew-carchey/archive/v1.0.tar.gz).
 
-## Installation
+## Installation from Homebrew
+```
+brew install dongcarl/carchey/carchey
+```
+
+## Installation from Source
 ```
 make install
 ```
