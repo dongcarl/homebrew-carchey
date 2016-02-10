@@ -46,7 +46,7 @@ make install
 ## Credits
 * [djmelik](https://github.com/djmelik/archey) - Archey
 * [joshfinnie](https://github.com/joshfinnie/archey-osx) - A great OSX Python port of Archey
-* [Gary00](https://github.com/Gary00/archey-osx) - A fork of joshfinnie's Archey port, and the base of this script.
+* [Gary00](https://github.com/Gary00/archey-osx) - A fork of joshfinnie's Archey port.
 * [rdlugosz](https://github.com/rdlugosz) - Fixing a math error with memory caculations.
 * [docwhat](https://github.com/docwhat) - Shell expertise and cleanups.
 * [slice27](https://github.com/slice27) - Shell wizardy allowing dynamic fields
