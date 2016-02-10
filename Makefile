@@ -1,6 +1,6 @@
 PREFIX ?= /usr/local
 
-CFLAGS += -Ofast -framework CoreFoundation -framework IOKit -framework CoreServices -Weverything
+CFLAGS += -O0 -framework CoreFoundation -framework IOKit -framework CoreServices -Weverything
 
 BROOT = ${PREFIX}/bin
 BPATH = ${BROOT}/carchey
